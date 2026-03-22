@@ -1,0 +1,21 @@
+SwapShelf — project setup (after installing Flutter SDK)
+
+1) Generate Android / iOS / Web folders (this repo ships lib/ + pubspec only):
+   Open a terminal in this folder (swapshelf) and run:
+   flutter create .
+
+2) Firebase
+   - Create a Firebase project at https://console.firebase.google.com
+   - Enable Authentication → Sign-in method → Email/Password
+   - Create Firestore (production mode) and Storage
+   - Register Android/iOS/Web apps and add SHA-1 for Android if you use Google sign-in later
+   - Run: dart pub global activate flutterfire_cli
+     then: flutterfire configure
+     This overwrites lib/firebase_options.dart with real keys.
+   - Deploy rules from this repo:
+     firebase deploy --only firestore:rules,storage
+
+3) Android: place google-services.json under android/app/
+   iOS: place GoogleService-Info.plist under ios/Runner/
+
+4) Run: flutter pub get && flutter run
