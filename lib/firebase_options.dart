@@ -27,7 +27,7 @@ class DefaultFirebaseOptions {
   // TODO: Replace with values from your Firebase project (Project settings → Your apps).
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'YOUR_WEB_API_KEY',
-    appId: 'YOUR_WEB_APP_ID',
+    appId: '1:374452499283:android:1db7333775871a6b5e67a6',
     messagingSenderId: 'YOUR_SENDER_ID',
     projectId: 'YOUR_PROJECT_ID',
     authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
@@ -35,11 +35,11 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: 'YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyB9491JhVCIXPY8Xx_uD5UkKrcAhlgLC6Q',
+    appId: '1:374452499283:android:1db7333775871a6b5e67a6',
+    messagingSenderId: '374452499283',
+    projectId: 'swapshelf-ed467',
+    storageBucket: 'swapshelf-ed467.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
