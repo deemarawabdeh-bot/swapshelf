@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -11,7 +10,6 @@ import 'screens/auth_screen.dart';
 import 'services/auth_service.dart';
 import 'services/chat_service.dart';
 import 'services/item_service.dart';
-import 'services/storage_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -27,7 +25,6 @@ class SwapShelfApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final firestore = FirebaseFirestore.instance;
     final auth = FirebaseAuth.instance;
-    final storage = FirebaseStorage.instance;
 
     return MultiProvider(
       providers: [
@@ -36,9 +33,6 @@ class SwapShelfApp extends StatelessWidget {
         ),
         Provider<ItemService>(
           create: (_) => ItemService(firestore),
-        ),
-        Provider<StorageService>(
-          create: (_) => StorageService(storage),
         ),
         Provider<ChatService>(
           create: (_) => ChatService(firestore),

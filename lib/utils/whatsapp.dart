@@ -5,13 +5,29 @@ Future<bool> openWhatsApp({
   String body = '',
 }) async {
   if (phone == null || phone.trim().isEmpty) return false;
-  final digits = phone.replaceAll(RegExp(r'\D'), '');
+  var digits = phone.replaceAll(RegExp(r'\D'), '');
+  if (digits.startsWith('0')) {
+    digits = '962${digits.substring(1)}';
+  }
   if (digits.isEmpty) return false;
-  final uri = Uri.parse(
+  final appUri = Uri.parse(
+    'whatsapp://send?phone=$digits&text=${Uri.encodeComponent(body)}',
+  );
+  final webUri = Uri.parse(
     'https://wa.me/$digits?text=${Uri.encodeComponent(body)}',
   );
-  if (await canLaunchUrl(uri)) {
-    return launchUrl(uri, mode: LaunchMode.externalApplication);
+
+  try {
+    if (await launchUrl(appUri, mode: LaunchMode.externalApplication)) {
+      return true;
+    }
+  } catch (_) {
+    // Fall back to web URL when WhatsApp app is unavailable.
   }
-  return false;
+
+  try {
+    return await launchUrl(webUri, mode: LaunchMode.externalApplication);
+  } catch (_) {
+    return false;
+  }
 }

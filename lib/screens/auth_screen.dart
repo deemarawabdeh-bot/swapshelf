@@ -42,13 +42,15 @@ class _AuthScreenState extends State<AuthScreen> {
           email: _email.text.trim(),
           password: _password.text,
           displayName: _name.text.trim(),
-          phone: _phone.text.trim().isEmpty ? null : _phone.text.trim(),
+          phone: _phone.text.trim(),
         );
       } else {
         await auth.signIn(_email.text.trim(), _password.text);
       }
-    } catch (e) {
-      setState(() => _error = e.toString());
+    } on AuthFailure catch (e) {
+      setState(() => _error = e.message);
+    } catch (_) {
+      setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -106,9 +108,17 @@ class _AuthScreenState extends State<AuthScreen> {
                         controller: _phone,
                         keyboardType: TextInputType.phone,
                         decoration: const InputDecoration(
-                          labelText: 'Phone (optional, for WhatsApp)',
+                          labelText: 'Phone number (required for WhatsApp)',
                           prefixIcon: Icon(Icons.phone_outlined),
                         ),
+                        validator: (v) {
+                          if (!_register) return null;
+                          final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+                          if (digits.length < 8) {
+                            return 'Enter a valid phone number';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 12),
                     ],

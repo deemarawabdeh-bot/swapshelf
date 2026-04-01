@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/chat_service.dart';
 import '../services/item_service.dart';
 import '../utils/whatsapp.dart';
+import 'add_item_screen.dart';
 import 'chat_screen.dart';
 
 class ItemDetailScreen extends StatelessWidget {
@@ -26,10 +27,10 @@ class ItemDetailScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Listing')),
-      body: FutureBuilder<ItemListing?>(
-        future: itemService.getItem(itemId),
+      body: StreamBuilder<ItemListing?>(
+        stream: itemService.watchItem(itemId),
         builder: (context, snap) {
-          if (!snap.hasData) {
+          if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
           final item = snap.data;
@@ -40,6 +41,9 @@ class ItemDetailScreen extends StatelessWidget {
             future: authService.fetchProfile(item.ownerId),
             builder: (context, userSnap) {
               final seller = userSnap.data;
+              final sellerPhone = seller?.phone?.trim();
+              final hasSellerPhone =
+                  sellerPhone != null && sellerPhone.isNotEmpty;
               final isOwner = me?.uid == item.ownerId;
 
               return SingleChildScrollView(
@@ -48,21 +52,23 @@ class ItemDetailScreen extends StatelessWidget {
                   children: [
                     AspectRatio(
                       aspectRatio: 4 / 3,
-                      child: item.imageUrl.isEmpty
-                          ? Container(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .surfaceContainerHighest,
-                              child: const Icon(Icons.image_not_supported,
-                                  size: 64),
-                            )
-                          : CachedNetworkImage(
-                              imageUrl: item.imageUrl,
-                              fit: BoxFit.cover,
-                              placeholder: (_, __) => const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            ),
+                      child: item.imageBytes != null
+                          ? Image.memory(item.imageBytes!, fit: BoxFit.cover)
+                          : item.imageUrl.isEmpty
+                              ? Container(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .surfaceContainerHighest,
+                                  child: const Icon(Icons.image_not_supported,
+                                      size: 64),
+                                )
+                              : CachedNetworkImage(
+                                  imageUrl: item.imageUrl,
+                                  fit: BoxFit.cover,
+                                  placeholder: (_, __) => const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                ),
                     ),
                     Padding(
                       padding: const EdgeInsets.all(20),
@@ -83,7 +89,23 @@ class ItemDetailScreen extends StatelessWidget {
                               ),
                               Chip(
                                 label: Text(
-                                  item.isFree ? 'Free' : item.priceLabel,
+                                  item.isFree
+                                      ? 'Free'
+                                      : (item.itemType == ItemListing.typeExchange
+                                            ? 'Exchange'
+                                            : item.priceLabel),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Chip(
+                                label: Text(
+                                  item.isAvailable
+                                      ? 'Available'
+                                      : (item.isSold ? 'Sold' : 'Unavailable'),
                                 ),
                               ),
                             ],
@@ -121,9 +143,15 @@ class ItemDetailScreen extends StatelessWidget {
                                 ),
                           ),
                           const SizedBox(height: 8),
-                          Text(
-                            'Seller: ${item.ownerName}',
-                            style: Theme.of(context).textTheme.titleSmall,
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Seller: ${item.ownerName}',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                            ],
                           ),
                           if (!isOwner && me != null) ...[
                             const SizedBox(height: 24),
@@ -156,9 +184,10 @@ class ItemDetailScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             OutlinedButton.icon(
-                              onPressed: () async {
+                              onPressed: hasSellerPhone
+                                  ? () async {
                                 final ok = await openWhatsApp(
-                                  phone: seller?.phone,
+                                  phone: sellerPhone,
                                   body:
                                       'Hi! I saw your listing "${item.title}" on SwapShelf.',
                                 );
@@ -167,23 +196,128 @@ class ItemDetailScreen extends StatelessWidget {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text(
-                                        'Add a phone number in the seller profile, or ask via in-app chat.',
+                                        'Could not open WhatsApp on this device.',
                                       ),
                                     ),
                                   );
                                 }
-                              },
+                              }
+                                  : null,
                               icon: const Icon(Icons.chat),
                               label: const Text('Contact on WhatsApp'),
                             ),
+                            if (!hasSellerPhone)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  'Seller phone is not available yet.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
+                              ),
                           ],
                           if (isOwner)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 24),
-                              child: Text(
-                                'This is your listing.',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                const SizedBox(height: 24),
+                                Text(
+                                  'This is your listing.',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                const SizedBox(height: 12),
+                                FilledButton.tonalIcon(
+                                  onPressed: () async {
+                                    await Navigator.of(context).push<bool>(
+                                      MaterialPageRoute(
+                                        builder: (_) => AddItemScreen(
+                                          initial: item,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.edit_outlined),
+                                  label: const Text('Edit listing'),
+                                ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: item.isSold
+                                      ? null
+                                      : () async {
+                                          await itemService.updateStatus(
+                                            item.id,
+                                            ItemListing.statusSold,
+                                          );
+                                        },
+                                  icon: const Icon(Icons.check_circle_outline),
+                                  label: const Text('Mark as sold'),
+                                ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: item.isAvailable
+                                      ? () async {
+                                          await itemService.updateStatus(
+                                            item.id,
+                                            ItemListing.statusUnavailable,
+                                          );
+                                        }
+                                      : () async {
+                                          await itemService.updateStatus(
+                                            item.id,
+                                            ItemListing.statusAvailable,
+                                          );
+                                        },
+                                  icon: const Icon(Icons.pause_circle_outline),
+                                  label: Text(
+                                    item.isAvailable
+                                        ? 'Mark unavailable'
+                                        : 'Mark available',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor:
+                                        Theme.of(context).colorScheme.error,
+                                  ),
+                                  onPressed: () async {
+                                    final confirmed = await showDialog<bool>(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            title: const Text('Delete listing?'),
+                                            content: const Text(
+                                              'This action cannot be undone.',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(false),
+                                                child: const Text('Cancel'),
+                                              ),
+                                              FilledButton(
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(true),
+                                                child: const Text('Delete'),
+                                              ),
+                                            ],
+                                          ),
+                                        ) ??
+                                        false;
+                                    if (!confirmed) return;
+                                    await itemService.deleteItem(item.id);
+                                    if (!context.mounted) return;
+                                    Navigator.of(context).pop();
+                                  },
+                                  icon: const Icon(Icons.delete_outline),
+                                  label: const Text('Delete listing'),
+                                ),
+                              ],
                             ),
                         ],
                       ),
