@@ -15,6 +15,7 @@ class ItemService {
   Stream<List<ItemListing>> watchItems({bool? freeOnly}) {
     return _items.orderBy('createdAt', descending: true).snapshots().map((snap) {
       var list = snap.docs.map(ItemListing.fromFirestore).toList();
+      list = list.where((e) => e.isAvailable).toList();
       if (freeOnly == true) {
         list = list.where((e) => e.isFree).toList();
       }
@@ -30,6 +31,13 @@ class ItemService {
     });
   }
 
+  Stream<ItemListing?> watchItem(String id) {
+    return _items.doc(id).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      return ItemListing.fromFirestore(doc);
+    });
+  }
+
   Future<ItemListing?> getItem(String id) async {
     final doc = await _items.doc(id).get();
     if (!doc.exists) return null;
@@ -42,5 +50,26 @@ class ItemService {
 
   Future<void> deleteItem(String id) async {
     await _items.doc(id).delete();
+  }
+
+  Future<void> updateItem(ItemListing listing) async {
+    await _items.doc(listing.id).set(
+      {
+        ...listing.toFirestore(),
+        'createdAt': listing.createdAt,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  Future<void> updateStatus(String id, String status) async {
+    await _items.doc(id).set(
+      {
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
   }
 }

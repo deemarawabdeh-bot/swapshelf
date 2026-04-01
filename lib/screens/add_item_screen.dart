@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -7,10 +8,11 @@ import 'package:provider/provider.dart';
 
 import '../models/item_listing.dart';
 import '../services/item_service.dart';
-import '../services/storage_service.dart';
 
 class AddItemScreen extends StatefulWidget {
-  const AddItemScreen({super.key});
+  const AddItemScreen({super.key, this.initial});
+
+  final ItemListing? initial;
 
   @override
   State<AddItemScreen> createState() => _AddItemScreenState();
@@ -21,9 +23,11 @@ class _AddItemScreenState extends State<AddItemScreen> {
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _price = TextEditingController();
-  bool _isFree = true;
+  String _itemType = ItemListing.typeFree;
   String _category = 'Textbooks';
   XFile? _image;
+  Uint8List? _existingImageBytes;
+  String? _existingImageUrl;
   bool _busy = false;
 
   static const _categories = [
@@ -33,6 +37,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
     'Electronics',
     'Other',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    final initial = widget.initial;
+    if (initial == null) return;
+    _title.text = initial.title;
+    _description.text = initial.description;
+    _price.text = initial.price?.toString() ?? '';
+    _itemType = initial.itemType;
+    _category = initial.category?.isNotEmpty == true
+        ? initial.category!
+        : _category;
+    _existingImageBytes = initial.imageBytes;
+    _existingImageUrl = initial.imageUrl.isEmpty ? null : initial.imageUrl;
+  }
 
   @override
   void dispose() {
@@ -54,7 +74,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_image == null) {
+    final hasExistingImageData =
+        _existingImageBytes != null ||
+        (_existingImageUrl != null && _existingImageUrl!.isNotEmpty);
+    if (_image == null && !hasExistingImageData) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please add a photo of the item.')),
       );
@@ -67,13 +90,19 @@ class _AddItemScreenState extends State<AddItemScreen> {
     setState(() => _busy = true);
     try {
       final items = context.read<ItemService>();
-      final storage = context.read<StorageService>();
-      final doc = items.newItemDoc();
-      final id = doc.id;
-      final url = await storage.uploadItemImage(_image!, id);
+      final editing = widget.initial != null;
+      final id = editing ? widget.initial!.id : items.newItemDoc().id;
+      final imageBytes = _image != null
+          ? await _image!.readAsBytes()
+          : _existingImageBytes;
+      if (imageBytes != null && imageBytes.lengthInBytes > 900000) {
+        throw Exception(
+          'Image is too large for Firestore. Please choose a smaller image.',
+        );
+      }
 
       double? price;
-      if (!_isFree) {
+      if (_itemType == ItemListing.typeSale) {
         price = double.tryParse(_price.text.trim());
       }
 
@@ -81,16 +110,22 @@ class _AddItemScreenState extends State<AddItemScreen> {
         id: id,
         title: _title.text.trim(),
         description: _description.text.trim(),
-        imageUrl: url,
+        imageUrl: _existingImageUrl ?? '',
+        imageBytes: imageBytes,
         ownerId: user.uid,
         ownerName: user.displayName ?? 'Student',
-        isFree: _isFree,
-        price: _isFree ? null : price,
+        itemType: _itemType,
+        status: widget.initial?.status ?? ItemListing.statusAvailable,
+        price: _itemType == ItemListing.typeSale ? price : null,
         category: _category,
-        createdAt: DateTime.now(),
+        createdAt: widget.initial?.createdAt ?? DateTime.now(),
       );
 
-      await items.setItem(id, listing);
+      if (editing) {
+        await items.updateItem(listing);
+      } else {
+        await items.setItem(id, listing);
+      }
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
@@ -105,8 +140,10 @@ class _AddItemScreenState extends State<AddItemScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isSale = _itemType == ItemListing.typeSale;
+    final isEdit = widget.initial != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('New listing')),
+      appBar: AppBar(title: Text(isEdit ? 'Edit listing' : 'New listing')),
       body: Form(
         key: _formKey,
         child: ListView(
@@ -124,16 +161,41 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       ? Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
-                              Icons.add_photo_alternate_outlined,
-                              size: 48,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Tap to add a photo',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
+                            if (_existingImageBytes != null)
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.memory(
+                                    _existingImageBytes!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                  ),
+                                ),
+                              )
+                            else if (_existingImageUrl != null &&
+                                _existingImageUrl!.isNotEmpty)
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    _existingImageUrl!,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                  ),
+                                ),
+                              )
+                            else ...[
+                              Icon(
+                                Icons.add_photo_alternate_outlined,
+                                size: 48,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Tap to add a photo',
+                                style: Theme.of(context).textTheme.titleSmall,
+                              ),
+                            ],
                           ],
                         )
                       : ClipRRect(
@@ -155,12 +217,39 @@ class _AddItemScreenState extends State<AddItemScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _category,
+              value: _category,
               decoration: const InputDecoration(labelText: 'Category'),
               items: _categories
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
               onChanged: _busy ? null : (v) => setState(() => _category = v!),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _itemType,
+              decoration: const InputDecoration(labelText: 'Listing type'),
+              items: const [
+                DropdownMenuItem(
+                  value: ItemListing.typeFree,
+                  child: Text('Free'),
+                ),
+                DropdownMenuItem(
+                  value: ItemListing.typeExchange,
+                  child: Text('Exchange'),
+                ),
+                DropdownMenuItem(
+                  value: ItemListing.typeSale,
+                  child: Text('For sale'),
+                ),
+              ],
+              onChanged: _busy
+                  ? null
+                  : (v) => setState(() {
+                        _itemType = v ?? ItemListing.typeFree;
+                        if (_itemType != ItemListing.typeSale) {
+                          _price.clear();
+                        }
+                      }),
             ),
             const SizedBox(height: 16),
             TextFormField(
@@ -187,25 +276,17 @@ class _AddItemScreenState extends State<AddItemScreen> {
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
             const SizedBox(height: 16),
-            SwitchListTile(
-              title: const Text('This item is free'),
-              value: _isFree,
-              onChanged: _busy
-                  ? null
-                  : (v) => setState(() {
-                        _isFree = v;
-                      }),
-            ),
-            if (!_isFree)
+            if (isSale)
               TextFormField(
                 controller: _price,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
                   labelText: 'Price',
                   hintText: '0.00',
                 ),
                 validator: (v) {
-                  if (_isFree) return null;
+                  if (!isSale) return null;
                   if (v == null || double.tryParse(v.trim()) == null) {
                     return 'Enter a valid number';
                   }
@@ -221,7 +302,7 @@ class _AddItemScreenState extends State<AddItemScreen> {
                       width: 22,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Publish listing'),
+                  : Text(isEdit ? 'Save changes' : 'Publish listing'),
             ),
           ],
         ),

@@ -11,7 +11,16 @@ class StorageService {
   Future<String> uploadItemImage(XFile file, String itemId) async {
     final name = file.name.isNotEmpty ? file.name : 'photo.jpg';
     final ref = _storage.ref().child('items').child(itemId).child(name);
-    final upload = await ref.putFile(File(file.path));
-    return upload.ref.getDownloadURL();
+    try {
+      final upload = await ref.putFile(File(file.path));
+      return upload.ref.getDownloadURL();
+    } on FirebaseException catch (e) {
+      if (e.code == 'object-not-found' || e.code == 'bucket-not-found') {
+        throw Exception(
+          'Firebase Storage bucket is not ready. In Firebase Console, enable Storage for this project and try again.',
+        );
+      }
+      rethrow;
+    }
   }
 }

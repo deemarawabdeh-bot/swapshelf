@@ -20,23 +20,28 @@ class ItemCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: item.imageUrl.isEmpty
-                  ? Container(
-                      color: scheme.surfaceContainerHighest,
-                      child: Icon(Icons.image_not_supported_outlined,
-                          size: 48, color: scheme.outline),
-                    )
-                  : CachedNetworkImage(
-                      imageUrl: item.imageUrl,
+              child: item.imageBytes != null
+                  ? Image.memory(
+                      item.imageBytes!,
                       fit: BoxFit.cover,
-                      placeholder: (_, __) => const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      errorWidget: (_, __, ___) => Container(
+                    )
+                  : item.imageUrl.isEmpty
+                      ? Container(
+                          color: scheme.surfaceContainerHighest,
+                          child: Icon(Icons.image_not_supported_outlined,
+                              size: 48, color: scheme.outline),
+                        )
+                      : CachedNetworkImage(
+                          imageUrl: item.imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
                         color: scheme.surfaceContainerHighest,
                         child: const Icon(Icons.broken_image_outlined),
-                      ),
-                    ),
+                          ),
+                        ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
@@ -63,7 +68,11 @@ class ItemCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      item.isFree ? 'Free' : item.priceLabel,
+                      item.isFree
+                          ? 'Free'
+                          : (item.itemType == ItemListing.typeExchange
+                                ? 'Exchange'
+                                : item.priceLabel),
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                             color: item.isFree
                                 ? scheme.onPrimaryContainer
@@ -72,6 +81,23 @@ class ItemCard extends StatelessWidget {
                           ),
                     ),
                   ),
+                  if (!item.isAvailable) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        item.isSold ? 'Sold' : 'Unavailable',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   Text(
                     item.ownerName,

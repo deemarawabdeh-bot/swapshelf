@@ -15,6 +15,17 @@ class BrowseTab extends StatefulWidget {
 
 class _BrowseTabState extends State<BrowseTab> {
   bool _freeOnly = false;
+  String _query = '';
+  String _selectedCategory = 'All';
+
+  static const List<String> _categories = [
+    'All',
+    'Textbooks',
+    'Notes & summaries',
+    'Lab gear & scrubs',
+    'Electronics',
+    'Other',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -23,20 +34,38 @@ class _BrowseTabState extends State<BrowseTab> {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: Text(
-                  'Find textbooks, notes, lab gear, and more.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+              TextField(
+                onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search by title or description',
                 ),
               ),
-              FilterChip(
-                label: const Text('Free only'),
-                selected: _freeOnly,
-                onSelected: (v) => setState(() => _freeOnly = v),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedCategory,
+                      decoration: const InputDecoration(labelText: 'Category'),
+                      items: _categories
+                          .map(
+                            (c) => DropdownMenuItem(value: c, child: Text(c)),
+                          )
+                          .toList(),
+                      onChanged: (v) =>
+                          setState(() => _selectedCategory = v ?? 'All'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Free'),
+                    selected: _freeOnly,
+                    onSelected: (v) => setState(() => _freeOnly = v),
+                  ),
+                ],
               ),
             ],
           ),
@@ -51,10 +80,28 @@ class _BrowseTabState extends State<BrowseTab> {
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-              final items = snapshot.data!;
+              var items = snapshot.data!;
+              if (_selectedCategory != 'All') {
+                items = items
+                    .where((e) => (e.category ?? '').trim() == _selectedCategory)
+                    .toList();
+              }
+              if (_query.isNotEmpty) {
+                items = items
+                    .where(
+                      (e) =>
+                          e.title.toLowerCase().contains(_query) ||
+                          e.description.toLowerCase().contains(_query),
+                    )
+                    .toList();
+              }
               if (items.isEmpty) {
-                return const Center(
-                  child: Text('No listings yet. Be the first to post!'),
+                return Center(
+                  child: Text(
+                    _query.isNotEmpty || _selectedCategory != 'All' || _freeOnly
+                        ? 'No listings match your filters.'
+                        : 'No listings yet. Be the first to post!',
+                  ),
                 );
               }
               return GridView.builder(
